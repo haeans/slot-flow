@@ -55,6 +55,23 @@ SCHEMA = [
     CREATE INDEX IF NOT EXISTS reservations_resource_start
         ON reservations (resource_id, start_at)
     """,
+    # 겹침의 최종 보장. 부등호가 엄격해 끝과 시작이 맞닿으면 겹침이 아니다. (D-003, D-009, D-032)
+    # 변경 시 트리거는 상태를 바꾸는 취소(R-008)와 함께 둔다.
+    """
+    CREATE TRIGGER IF NOT EXISTS reservations_no_overlap_insert
+    BEFORE INSERT ON reservations
+    WHEN NEW.status = 'reserved'
+    BEGIN
+        SELECT RAISE(ABORT, 'OVERLAP')
+        WHERE EXISTS (
+            SELECT 1 FROM reservations
+            WHERE resource_id = NEW.resource_id
+              AND status = 'reserved'
+              AND start_at < NEW.end_at
+              AND NEW.start_at < end_at
+        );
+    END
+    """,
 ]
 
 

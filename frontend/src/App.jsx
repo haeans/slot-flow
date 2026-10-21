@@ -7,6 +7,7 @@ const REASON_LABEL = {
   RESOURCE_NOT_FOUND: '자원 없음',
   PAST_TIME: '지나간 시각',
   OUTSIDE_OPERATING_HOURS: '운영시간 밖',
+  OVERLAP: '겹침',
 }
 
 const timeOf = (dateTime) => dateTime.slice(11, 16)
@@ -81,7 +82,8 @@ function App() {
     })
     setSubmitting(false)
     setResult(res)
-    if (res.kind === 'ok') setSlotsVersion((v) => v + 1)
+    // 성공했거나 겹침으로 거부되면 칸을 다시 조회해 최신 점유 상태를 보여 준다. (SCREEN-SPEC 6절)
+    if (res.kind === 'ok' || res.error?.code === 'OVERLAP') setSlotsVersion((v) => v + 1)
   }
 
   if (resourcesFailed) {
