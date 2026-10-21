@@ -34,6 +34,27 @@ SCHEMA = [
         CHECK (open_time < close_time)
     ) STRICT
     """,
+    # 예약. id는 내부 키이고 API에 내보내지 않는다. (D-029, D-030, D-033)
+    """
+    CREATE TABLE IF NOT EXISTS reservations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        reservation_code TEXT NOT NULL UNIQUE
+            CHECK (length(reservation_code) = 10
+                   AND reservation_code NOT GLOB '*[^23456789ABCDEFGHJKMNPQRSTUVWXYZ]*'),
+        resource_id INTEGER NOT NULL REFERENCES resources(id),
+        start_at TEXT NOT NULL
+            CHECK (start_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]T[0-2][0-9]:[03]0:00+09:00'),
+        end_at TEXT NOT NULL
+            CHECK (end_at GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]T[0-2][0-9]:[03]0:00+09:00'),
+        status TEXT NOT NULL DEFAULT 'reserved' CHECK (status IN ('reserved', 'cancelled')),
+        customer_name TEXT NOT NULL,
+        CHECK (start_at < end_at)
+    ) STRICT
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS reservations_resource_start
+        ON reservations (resource_id, start_at)
+    """,
 ]
 
 

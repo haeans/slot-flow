@@ -1,8 +1,19 @@
+from datetime import datetime
+
 import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.storage import db
+from app.validation import reservation_rules
+
+# 테스트의 "지금". 2026-11-02(월)보다 앞선 날이다.
+FIXED_NOW = datetime(2026, 10, 21, 12, 0, tzinfo=reservation_rules.KST)
+
+
+@pytest.fixture(autouse=True)
+def fixed_now(monkeypatch):
+    monkeypatch.setattr(reservation_rules, "now_seoul", lambda: FIXED_NOW)
 
 
 @pytest.fixture
