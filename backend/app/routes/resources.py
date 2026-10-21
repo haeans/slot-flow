@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.services import resources as service
+from app.services import slots as slot_service
 from app.storage.db import connect
 from app.validation.resource_input import ResourceInput, check_resource_input
 
@@ -14,6 +15,16 @@ def list_resources():
     conn = connect()
     try:
         return {"resources": service.list_resource_names(conn)}
+    finally:
+        conn.close()
+
+
+@router.get("/{resource_id}/slots")
+def list_slots(resource_id: int, date: str):
+    day = slot_service.parse_date(date)
+    conn = connect()
+    try:
+        return slot_service.list_slots(conn, resource_id, day)
     finally:
         conn.close()
 

@@ -20,6 +20,20 @@ SCHEMA = [
         CHECK (min_duration_minutes <= max_duration_minutes)
     ) STRICT
     """,
+    # 요일마다 한 구간. 운영하지 않는 요일은 행이 없다. (D-019, D-031)
+    """
+    CREATE TABLE IF NOT EXISTS operating_hours (
+        resource_id INTEGER NOT NULL REFERENCES resources(id),
+        weekday TEXT NOT NULL
+            CHECK (weekday IN ('mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun')),
+        open_time TEXT NOT NULL
+            CHECK (open_time GLOB '[0-2][0-9]:[03]0' AND substr(open_time, 1, 2) <= '23'),
+        close_time TEXT NOT NULL
+            CHECK (close_time GLOB '[0-2][0-9]:[03]0' AND substr(close_time, 1, 2) <= '23'),
+        PRIMARY KEY (resource_id, weekday),
+        CHECK (open_time < close_time)
+    ) STRICT
+    """,
 ]
 
 
