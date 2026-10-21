@@ -5,4 +5,50 @@ body {
 
 main {
   padding: 2rem;
+  max-width: 40rem;
+}
+
+label {
+  display: block;
+  margin: 0.5rem 0;
+}
+
+label > select,
+label > input {
+  margin-left: 0.5rem;
+}
+
+.slots {
+  list-style: none;
+  padding: 0;
+}
+
+.slots li {
+  padding: 0.25rem 0.5rem;
+  margin: 0.125rem 0;
+  border: 1px solid #ccc;
+}
+
+.slots li.reserved {
+  background: #eee;
+  color: #666;
+}
+
+.result {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  border: 2px solid;
+}
+
+.result.ok {
+  border-color: #2a7a2a;
+}
+
+.result.error {
+  border-color: #b33;
+}
+
+.code {
+  font-size: 1.5rem;
+  letter-spacing: 0.1em;
 }
