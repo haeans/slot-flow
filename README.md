@@ -1,6 +1,6 @@
 # slot-flow
 
-설정형 예약 웹 도구. 설계 문서: `PRD.md`, `ARCHITECTURE.md`, `DECISIONS.md`.
+설정형 예약 웹 도구. 설계 문서: `PRD.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `USER-WORKFLOW.md`, `SCREEN-SPEC.md`, `API-SPEC.md`, `DATA-MODEL.md`.
 현재는 M0(프로젝트 기본 구조)만 있으며 기능은 없다.
 
 ## 구조
