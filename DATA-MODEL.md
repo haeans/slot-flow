@@ -152,14 +152,13 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
 | 예약 코드 표시 (예약하기 성공), 입력·표시 (내 예약) | `reservation_code` | `reservations.reservation_code` | 4.3 | D-016, D-033 |
 | 날짜 필터 (예약 목록) | `date` (쿼리) | `reservations.start_at` 범위 비교 | `YYYY-MM-DD` | D-013 |
 | 거부 사유 표시 (모든 화면) | `error.code`, `error.message` | 저장하지 않음 | API-SPEC 1.6 | D-006 |
-| (운영자 로그인 화면) | `password` | 저장하지 않음 (환경 변수) | — | D-017 |
+| 비밀번호 입력 (운영자 로그인) | `password` | 저장하지 않음 (환경 변수) | — | D-017, D-038 |
 | (화면 메모리) | `token` | 저장하지 않음 (서버 메모리) | — | D-023 |
 
 짝 없음:
 | 값 | 없는 쪽 | 이유 |
 |---|---|---|
 | `reservations.id` | API, 화면 | 내부 키다. 외부 식별자는 예약 코드다 (D-029) |
-| 운영자 로그인 화면 | 화면 | SCREEN-SPEC에 아직 없다 (SCREEN-SPEC 2절, 결정 필요) |
 | 예약 목록의 예약 코드 | API, 화면 | 운영자에게 보여 줄지 **[결정 필요 Q-20]**. 컬럼은 있다 |
 | 고객에게 보여 줄 이용 규칙 | API, 화면 | 범위 **[결정 필요 Q-17]**. 컬럼은 있다 |
 | 거부 사유의 종류 | 화면 | SCREEN-SPEC 1절은 사유 5개, API-SPEC 1.6은 11개다. SCREEN-SPEC이 D-024·D-025를 아직 반영하지 않았다 |
