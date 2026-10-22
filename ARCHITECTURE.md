@@ -1,4 +1,4 @@
-- 상태: 작성 중
+- 상태: 작성완료
 
 # ARCHITECTURE — 설정형 예약 웹 도구 (slot-flow)
 
