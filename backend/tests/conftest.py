@@ -1,6 +1,11 @@
+import os
 from datetime import datetime
 
 import pytest
+
+# 테스트 전용 세션 비밀값. 실제 값은 backend/.env 에만 있다. (D-049)
+os.environ["SLOTFLOW_SESSION_SECRET"] = "test-only-secret-" + "0" * 64
+
 from fastapi.testclient import TestClient
 
 from app.main import app
