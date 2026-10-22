@@ -28,3 +28,7 @@ M0에서 아래 패키지를 설치했다 (2026-10-19). 위 도구 자체는 이
 
 - backend (uv, Python 3.12): fastapi, uvicorn[standard]
 - frontend (npm): react, react-dom, vite, @vitejs/plugin-react, oxlint (Vite React 템플릿 기본)
+
+M2에서 아래 패키지를 설치했다 (2026-10-22).
+
+- backend (uv, Python 3.12): pwdlib[argon2] 0.3.1, alembic 1.20.1
