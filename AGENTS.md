@@ -15,3 +15,10 @@
 - 테스트가 실패하면 멈춘다.
 - API 키 · 비밀번호는 Git 에 넣지 않는다.
 - 커밋 메시지는 임의로 넣지 않고, 사용자가 직접 정한 메시지로 커밋한다.
+
+## 문서 상태
+- 문서 맨 위에 `- 상태:`로 적고, 값은 둘 중 하나다.
+  - 초안: 뼈대를 작성하는 중이다.
+  - 확정: 뼈대가 완성됐다. 프로젝트 동안 계속 갱신하며, 바꿀 때는 별도 결정이 필요하다.
+- 적용 대상: PRD · DECISIONS · ARCHITECTURE · USER-WORKFLOW · SCREEN-SPEC · API-SPEC · DATA-MODEL · SCENARIO-REVIEW · BUSINESS-RULE-REVIEW · BUG. 그 밖의 문서(README · AGENTS · DEV-ENVIRONMENT · PRODUCT-DIRECTION · PROJECT-DISCOVERY)는 대상이 아니다.
+- 확정 문서라도 기록 칸을 채우는 것은 변경으로 보지 않는다. 기록 칸은 REVIEW 문서의 실제결과 · 판정 · 검수 회차, BUG의 버그 행, DECISIONS의 보류 목록이다.
