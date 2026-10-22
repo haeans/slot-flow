@@ -25,6 +25,14 @@ def client(tmp_path):
     db.set_db_path(db.DEFAULT_DB_PATH)
 
 
+@pytest.fixture
+def tmp_db(tmp_path):
+    # 서버 없이 서비스·명령을 부를 때 쓰는 임시 DB
+    db.set_db_path(tmp_path / "test.db")
+    yield
+    db.set_db_path(db.DEFAULT_DB_PATH)
+
+
 def week_hours(**days):
     """일곱 요일 키를 모두 채운다. 따로 주지 않은 요일은 운영하지 않음(null)."""
     hours = {day: None for day in ("mon", "tue", "wed", "thu", "fri", "sat", "sun")}
