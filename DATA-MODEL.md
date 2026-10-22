@@ -26,7 +26,7 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
   | `PRAGMA foreign_keys` | `ON` | SQLite는 외래키 검사를 연결마다 켜야 한다 |
   | `PRAGMA busy_timeout` | `5000` (밀리초) | 다른 쓰기가 끝날 때까지 기다린다. 초과하면 `STORAGE_ERROR`(500) |
   | `PRAGMA journal_mode` | `WAL` | 쓰는 동안에도 읽기가 막히지 않는다 |
-- DB 파일은 `backend/data/slot-flow.db`이다. 서버를 시작할 때 테이블이 없으면 만든다(`CREATE TABLE IF NOT EXISTS`). DB 파일은 Git에 넣지 않는다. (D-034)
+- DB 파일은 `backend/data/slot-flow.db`이다. 서버를 시작할 때 alembic 절차(`backend/migrations`)를 최신까지 적용하고, DB 파일이 없으면 새로 만든다. DB 파일은 Git에 넣지 않는다. (D-034, D-064, `DATA-MIGRATION-PLAN.md` 5절)
 
 ## 2. 테이블
 

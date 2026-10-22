@@ -104,9 +104,9 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
    1. 입력 형식 (`INVALID_INPUT`). 이메일은 2.1처럼 정리한다.
    2. 그 이메일의 `login_failures`가 잠겨 있으면(`locked_until > 지금`) 비밀번호를 확인하지 않고 `TOO_MANY_ATTEMPTS`. 계정이 있든 없든 같다. (D-062)
    3. 이메일로 계정을 찾는다. 없으면 미리 만들어 둔 가짜 argon2 값으로 검증을 한 번 해서 응답 시간을 맞춘다. (D-054)
-   4. `PasswordHasher.verify`로 비밀번호를 확인한다. 계정이 없거나 틀리면 쓰기 단위 안에서 `login_failures`를 1 올리고(5번째면 10분 잠금) `UNAUTHENTICATED`. 5번째 실패의 응답도 `UNAUTHENTICATED`이고, 그다음 요청부터 `TOO_MANY_ATTEMPTS`다. (D-054, D-062, DATA-MIGRATION-PLAN 2.3)
+   4. `PasswordHash.verify_and_update`로 비밀번호를 확인한다. (D-063) 계정이 없거나 틀리면 쓰기 단위 안에서 `login_failures`를 1 올리고(5번째면 10분 잠금) `UNAUTHENTICATED`. 5번째 실패의 응답도 `UNAUTHENTICATED`이고, 그다음 요청부터 `TOO_MANY_ATTEMPTS`다. (D-054, D-062, DATA-MIGRATION-PLAN 2.3)
    5. 정지된 운영자면 `OPERATOR_SUSPENDED`. 비밀번호가 맞은 뒤에만 알린다. 그래야 비밀번호를 모르는 사람이 정지 여부를 알 수 없다. (D-053)
-   6. `check_needs_rehash`가 참이면 비밀번호 값을 새로 계산한다. (D-055)
+   6. 4번의 `verify_and_update`가 새 비밀번호 값을 돌려줬으면(설정이 바뀐 경우) 그 값을 저장한다. (D-063)
    7. 쓰기 단위 시작 → 그 이메일의 `login_failures` 행 삭제, 새 비밀번호 값 저장(6번), 세션 저장(`expires_at` = 지금 + 7일) → 쓰기 단위 끝
    8. `Set-Cookie`로 세션 쿠키를 보낸다. (1.5)
    - 같은 계정의 기존 세션은 지우지 않는다(다른 브라우저의 로그인 유지).
@@ -172,7 +172,7 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 | 세션 확인 (1.6) | 모든 요청의 진입 단계 (FastAPI 의존성 하나) | D-005, D-007 |
 | 역할·운영자 상태 (C-5) | 운영자·관리자 요청의 진입 단계 | D-005, D-043, D-052 |
 | 운영자 소유 (C-9) | 자원·예약을 다루는 운영자 요청. 자원 존재 확인과 같은 쓰기 단위 안 | D-044, D-035 |
-| 비밀번호 계산·검증 | 계정 서비스 한 곳 (`argon2.PasswordHasher` 하나를 재사용) | D-007, D-055 |
+| 비밀번호 계산·검증 | 계정 서비스 한 곳 (`pwdlib.PasswordHash.recommended()` 하나를 재사용) | D-007, D-063 |
 
 ---
 
