@@ -3,11 +3,12 @@ import sqlite3
 import pytest
 from alembic import command
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from pwdlib import PasswordHash
 
 from app.storage import db
 
-# 절차 0001·0002 의 저장소 검사. (DATA-MIGRATION-PLAN 5.4)
+# 절차의 저장소 검사. (DATA-MIGRATION-PLAN 5.4)
 NOW = "2026-10-21T12:00:00+09:00"
 LATER = "2026-10-28T12:00:00+09:00"
 HASH = PasswordHash.recommended().hash("password-1234")
@@ -41,7 +42,8 @@ def test_head_has_six_strict_tables(conn):
     tables = user_tables(conn)
     assert set(tables) == TABLES
     assert all(tables.values())
-    assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0002"
+    head = ScriptDirectory.from_config(Config(str(db.ALEMBIC_INI))).get_current_head()
+    assert conn.execute("SELECT version_num FROM alembic_version").fetchone()[0] == head
 
 
 def test_downgrade_to_base_and_upgrade_again(conn, tmp_path):
@@ -116,3 +118,30 @@ def test_login_failures_rules(conn, count, locked_until, ok):
     else:
         with pytest.raises(sqlite3.IntegrityError):
             insert()
+
+
+def test_0003_stops_when_resource_has_no_owner(tmp_path):
+    # 소유자를 정할 수 없는 자원이 있으면 절차가 멈추고, 데이터를 지우지 않는다. (D-064)
+    db.set_db_path(tmp_path / "old.db")
+    config = Config(str(db.ALEMBIC_INI))
+    config.attributes["skip_logging"] = True
+    try:
+        command.upgrade(config, "0002")
+        c = db.connect()
+        c.execute("INSERT INTO resources (name, min_duration_minutes, max_duration_minutes,"
+                  " cancel_deadline_hours) VALUES ('옛 자원', 30, 60, 24)")
+        c.close()
+        with pytest.raises(RuntimeError, match="소유 운영자가 없는 자원"):
+            command.upgrade(config, "head")
+        c = db.connect()
+        assert c.execute("SELECT count(*) FROM resources").fetchone()[0] == 1
+        assert c.execute("SELECT version_num FROM alembic_version").fetchone()[0] == "0002"
+        c.close()
+    finally:
+        db.set_db_path(db.DEFAULT_DB_PATH)
+
+
+def test_resources_require_owner(conn):
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute("INSERT INTO resources (name, min_duration_minutes, max_duration_minutes,"
+                     " cancel_deadline_hours) VALUES ('자원', 30, 60, 24)")

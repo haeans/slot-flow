@@ -148,7 +148,7 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 | `POST /api/resources` | 누구나 | 승인된 운영자 | 세션 없음 `401 UNAUTHENTICATED` → 운영자 아님 `403 FORBIDDEN` → 승인 대기 `403 OPERATOR_NOT_APPROVED` → 정지 `403 OPERATOR_SUSPENDED` |
 | `PUT /api/resources/{resource_id}` | 누구나, 모든 자원 | 승인된 운영자, 자기 자원만 | 위와 같음 → 다른 운영자의 자원 `404 RESOURCE_NOT_FOUND` (C-9) |
 | `GET /api/operator/reservations` | 누구나, 모든 자원 | 승인된 운영자, 자기 자원만 | 위와 같음 → 다른 운영자의 자원 `404 RESOURCE_NOT_FOUND` (C-9) |
-| `GET /api/resources` | 누구나, 모든 자원 | 운영자: 자기 자원만. 고객: `?operator={예약 주소명}`의 운영자 자원 | `operator` 쿼리가 없으면 운영자 요청으로 보고 위와 같이 막는다(`401`·`403`). 쿼리가 있으면 세션을 보지 않고, 그 주소명의 승인된 운영자가 없으면 `404 OPERATOR_NOT_FOUND`(승인 대기 포함). 정지된 운영자의 주소: **[결정 필요 Q-27]** (D-059) |
+| `GET /api/resources` | 누구나, 모든 자원 | 운영자: 자기 자원만. 고객: `?operator={예약 주소명}`의 운영자 자원 | `operator` 쿼리가 없으면 운영자 요청으로 보고 위와 같이 막는다(`401`·`403`). 쿼리가 있으면 세션을 보지 않고, 그 주소명의 승인된 운영자가 없으면 `404 OPERATOR_NOT_FOUND`(승인 대기 포함). 정지된 운영자의 주소도 `404 OPERATOR_NOT_FOUND` (D-059, D-065) |
 | `POST /api/auth/signup` (`role: "admin"`) | — (새 요청) | 관리자 계정은 서버 명령으로만 | `400 INVALID_INPUT` (D-050) |
 
 - 정지된 운영자는 세션이 지워져 보통 `401`을 받는다. `403 OPERATOR_SUSPENDED`는 정지와 요청이 거의 같은 때 들어온 경우를 위한 것이다. (D-052, D-053)
@@ -207,6 +207,6 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 
 ## 8. 결정 필요
 
-- Q-27: 정지된 운영자의 예약 주소로 들어온 고객 조회
+- 회원 예약의 `customer_name`, 운영자 관리·회원 예약 목록 API (#6·#7에서 더함)
 - 회원 예약의 `customer_name`: 따로 보내는지, 계정 이름을 쓰는지 (API-SPEC 5.1)
 - 예약 주소명 변경 (PRD에 없음)

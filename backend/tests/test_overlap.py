@@ -11,6 +11,12 @@ from app.storage.db import connect
 from app.validation.reservation_rules import ReservationInput, check_reservation_input
 
 
+@pytest.fixture
+def client(operator_client):
+    # 이 파일의 요청은 승인된 운영자로 로그인한 채로 보낸다. (D-043, D-044)
+    return operator_client
+
+
 def make_resource(client, name="공방 작업대 A") -> int:
     return client.post("/resources", json=resource_body(name=name)).json()["id"]
 

@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime
 
 from app.errors import ApiError, resource_not_found
-from app.services.resources import load_operating_hours
+from app.services.resources import bookable_resource, load_operating_hours
 from app.storage.db import write_unit
 from app.validation import reservation_rules as rules
 from app.validation.resource_input import WEEKDAYS
@@ -41,9 +41,7 @@ def create_reservation(conn: sqlite3.Connection, data: rules.ReservationInput,
                        start: datetime, end: datetime) -> dict:
     """판정 순서: 쓰기 단위 시작 → 자원 존재 → 지나간 시각 → C-1 → 저장 (D-028, D-035)"""
     with write_unit(conn):
-        resource = conn.execute(
-            "SELECT name FROM resources WHERE id = ?", (data.resource_id,)
-        ).fetchone()
+        resource = bookable_resource(conn, data.resource_id)
         if resource is None:
             raise resource_not_found()
         rules.check_not_past(start, rules.now_seoul())

@@ -1,4 +1,11 @@
+import pytest
 from conftest import resource_body
+
+
+@pytest.fixture
+def client(operator_client):
+    # 이 파일의 요청은 승인된 운영자로 로그인한 채로 보낸다. (D-043, D-044)
+    return operator_client
 
 
 def test_create_resource_appears_in_list(client):
@@ -8,8 +15,9 @@ def test_create_resource_appears_in_list(client):
     assert created["name"] == "공방 작업대 A"
     assert created["max_duration_minutes"] == 120
 
+    # 운영자는 자기 자원을 자원 객체 그대로 받는다. (API-SPEC 4.1)
     listed = client.get("/resources").json()
-    assert listed == {"resources": [{"id": created["id"], "name": "공방 작업대 A"}]}
+    assert listed == {"resources": [created]}
 
 
 def test_invalid_duration_is_rejected(client):

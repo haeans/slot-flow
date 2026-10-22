@@ -1,4 +1,11 @@
+import pytest
 from conftest import resource_body, week_hours
+
+
+@pytest.fixture
+def client(operator_client):
+    # 이 파일의 요청은 승인된 운영자로 로그인한 채로 보낸다. (D-043, D-044)
+    return operator_client
 
 MONDAY = "2026-11-02"
 TUESDAY = "2026-11-03"

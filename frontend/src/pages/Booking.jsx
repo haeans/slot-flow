@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import { request } from '../api.js'
 
 // 거부 사유를 규칙별로 구분해 보여 준다. 문장은 서버가 준 message를 그대로 쓴다. (D-013)
@@ -12,9 +13,11 @@ const REASON_LABEL = {
 
 const timeOf = (dateTime) => dateTime.slice(11, 16)
 
+// 화면 3 — 예약하기. 고객은 운영자가 알려 준 예약 주소 /r/{예약 주소명}으로 들어온다. (D-046, D-059)
 export default function Booking() {
+  const { slug } = useParams()
   const [resources, setResources] = useState(null)
-  const [resourcesFailed, setResourcesFailed] = useState(false)
+  const [resourcesFailed, setResourcesFailed] = useState('')
   const [resourceId, setResourceId] = useState('')
   const [date, setDate] = useState('')
   const [slots, setSlots] = useState(null)
@@ -27,11 +30,12 @@ export default function Booking() {
   const [result, setResult] = useState(null)
 
   useEffect(() => {
-    request('/resources').then((res) => {
+    request(`/resources?operator=${encodeURIComponent(slug)}`).then((res) => {
       if (res.kind === 'ok') setResources(res.data.resources)
-      else setResourcesFailed(true)
+      else if (res.error?.code === 'OPERATOR_NOT_FOUND') setResourcesFailed(res.error.message)
+      else setResourcesFailed('자원 목록을 불러오지 못했습니다. 새로고침해 주세요.')
     })
-  }, [])
+  }, [slug])
 
   useEffect(() => {
     if (!resourceId || !date) return
@@ -90,7 +94,7 @@ export default function Booking() {
     return (
       <main>
         <h1>예약하기</h1>
-        <p role="alert">자원 목록을 불러오지 못했습니다. 새로고침해 주세요.</p>
+        <p role="alert">{resourcesFailed}</p>
       </main>
     )
   }
