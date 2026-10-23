@@ -36,3 +36,10 @@
   - 확정: 뼈대가 완성됐다. 프로젝트 동안 계속 갱신하며, 바꿀 때는 별도 결정이 필요하다.
 - 적용 대상: PRD · DECISIONS · ARCHITECTURE · USER-WORKFLOW · SCREEN-SPEC · API-SPEC · DATA-MODEL · SCENARIO-REVIEW · BUSINESS-RULE-REVIEW · BUG. 그 밖의 문서(README · AGENTS · DEV-ENVIRONMENT · PRODUCT-DIRECTION · PROJECT-DISCOVERY)는 대상이 아니다.
 - 확정 문서라도 기록 칸을 채우는 것은 변경으로 보지 않는다. 기록 칸은 REVIEW 문서의 실제결과 · 판정 · 검수 회차, BUG의 버그 행, DECISIONS의 보류 목록이다.
+
+## 문서 길이
+- 폐기된 결정은 제목과 `유효 상태` 한 줄(`폐기 (D-xxx로 대체)`)만 남긴다. 원문은 Git 이력으로 본다.
+- 일부 폐기된 결정은 유효한 부분만 남긴다.
+- 결정된 질문은 `(결정됨, D-xxx)`와 결론 한 줄만 적는다. 변경 이력(`D-xxx → D-yyy`)과 이전 질문은 적지 않는다.
+- DECISIONS의 "결정 필요 모아 보기"에는 열린 질문만 두고, 결정된 질문은 "결정된 항목" 표에 한 줄로 옮긴다.
+- 줄이거나 고칠 때도 ID(D-xxx, Q-xx, R-xxx, US-xxx, F-xx, A-xx, C-x, SC-xxx)는 지우거나 바꾸지 않는다.

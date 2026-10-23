@@ -2,7 +2,7 @@
 
 # DATA-MODEL — 설정형 예약 웹 도구 (slot-flow)
 
-근거 문서: `PRD.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `API-SPEC.md`, `SCREEN-SPEC.md`, `USER-WORKFLOW.md`. US-xxx, Q-xxx, D-xxx, C-x(공통 검증 ID)는 이 문서들의 ID를 그대로 쓴다.
+근거 문서: `PRD.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `API-SPEC.md`, `SCREEN-SPEC.md`, `USER-WORKFLOW.md`, `DATA-MIGRATION-PLAN.md`. US-xxx, Q-xxx, D-xxx, C-x(공통 검증 ID)는 이 문서들의 ID를 그대로 쓴다.
 ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 타입, 제약, 인덱스)으로 구체화한다.
 아직 정해지지 않은 것은 **[결정 필요 Q-xx]**로 표시하고 이 문서에서 정하지 않는다. PRD에 Q-ID가 없는 항목은 **[결정 필요: PRD에 없음]**으로 표시한다.
 이 문서를 쓰면서 정한 것은 8절에 모았고, `DECISIONS.md`의 D-029~D-036으로 기록했다.
@@ -16,9 +16,12 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
 | `resources` | 자원 이름, 최소·최대 이용시간, 취소 마감 | 자원 |
 | `operating_hours` | 자원의 요일별 운영시간 (요일마다 한 행) | 자원 (운영시간) |
 | `reservations` | 예약 한 건 | 예약 |
+| `accounts` | 관리자·운영자·회원 고객 계정 | 계정 |
+| `sessions` | 로그인 세션 (토큰의 HMAC 값만) | 계정 (세션) |
+| `login_failures` | 이메일별 연속 로그인 실패와 잠금 | 계정 (로그인 시도 제한) |
 
 - 모든 테이블은 `STRICT` 테이블로 만든다. 선언한 타입과 다른 값은 저장소가 거부한다. (D-029)
-- 계정(관리자·운영자·회원 고객)을 저장하는 테이블이 더해진다(D-042). 비밀번호는 argon2id 값으로 저장하고(D-055), 로그인 세션도 DB에 저장한다(D-049). 계정·세션 테이블과 이전 절차는 `DATA-MIGRATION-PLAN.md`에 있다(D-057). 테이블은 여섯이 된다(D-057, D-062).
+- 테이블은 여섯이다(D-057, D-062). 계정·세션·로그인 실패는 2.4~2.6절이다. 구조를 만들고 바꾸는 절차는 `DATA-MIGRATION-PLAN.md` 5절(절차 0001~0004)이다. (D-064)
 - 저장소의 CHECK 제약은 최후 방어다. 판정은 API의 입력 형식 검사와 공통 검증이 먼저 한다(D-002, D-036). 그런데도 CHECK에 걸리면 판정이 빠진 버그로 보고 `STORAGE_ERROR`(500)로 응답한다. 겹침 트리거는 예외로, 저장 단계의 최종 보장(D-003)이며 `OVERLAP`(409)으로 응답한다. (3절)
 - 모든 연결에서 아래를 설정한다. (D-032)
   | 설정 | 값 | 이유 |
@@ -26,7 +29,7 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
   | `PRAGMA foreign_keys` | `ON` | SQLite는 외래키 검사를 연결마다 켜야 한다 |
   | `PRAGMA busy_timeout` | `5000` (밀리초) | 다른 쓰기가 끝날 때까지 기다린다. 초과하면 `STORAGE_ERROR`(500) |
   | `PRAGMA journal_mode` | `WAL` | 쓰는 동안에도 읽기가 막히지 않는다 |
-- DB 파일은 `backend/data/slot-flow.db`이다. 서버를 시작할 때 테이블이 없으면 만든다(`CREATE TABLE IF NOT EXISTS`). DB 파일은 Git에 넣지 않는다. (D-034)
+- DB 파일은 `backend/data/slot-flow.db`이다. 서버를 시작할 때 alembic 절차(`backend/migrations`)를 최신까지 적용하고, DB 파일이 없으면 새로 만든다. DB 파일은 Git에 넣지 않는다. (D-034, D-064, `DATA-MIGRATION-PLAN.md` 5절)
 
 ## 2. 테이블
 
@@ -38,10 +41,12 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
 | `min_duration_minutes` | INTEGER | 불가 | — | — | `> 0`, `% 30 = 0` | D-018, D-029 |
 | `max_duration_minutes` | INTEGER | 불가 | — | — | `> 0`, `% 30 = 0`, `min_duration_minutes <= max_duration_minutes` | D-018, D-029, D-036 |
 | `cancel_deadline_hours` | INTEGER | 불가 | — | — | 범위(0 허용 여부, 상한) **[결정 필요: PRD에 없음]** | D-012 |
+| `owner_account_id` | INTEGER | 불가 | — | FK → `accounts.id` | — | D-044, D-057 |
 
 - 이름 외 자원 정보: **[결정 필요 Q-15]**
 - 자원 삭제·숨김은 두지 않는다. 그래서 외래키의 삭제 동작(`ON DELETE`)도 정하지 않는다. **[결정 필요 Q-15]**
-- **소유 운영자**: 자원마다 소유 운영자를 가리키는 컬럼을 둔다(D-044). 컬럼 이름·타입·참조 대상(계정 테이블)은 4단계에서 정한다. 운영자 소유 확인(C-9)이 이 컬럼을 쓴다.
+- **소유 운영자**: 자원을 등록한 운영자의 계정이다. 운영자 소유 확인(C-9)이 이 컬럼을 쓴다. 이 계정이 `role = 'operator'`인지는 저장소가 아니라 API 진입 단계의 역할 검사(C-5)가 보장한다. (D-044)
+- 고객이 예약할 수 있는 자원은 소유 운영자가 `approved`인 자원뿐이다. 정지된 운영자의 자원은 새 예약을 받지 않는다. (D-065)
 
 ### 2.2 `operating_hours` — 요일별 운영시간
 | 컬럼 | 타입 | NULL | 기본값 | 키 | 제약 | 근거 |
@@ -64,11 +69,53 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
 | `start_at` | TEXT | 불가 | — | — | 시각 형식 (4.1) | D-022, D-030 |
 | `end_at` | TEXT | 불가 | — | — | 시각 형식 (4.1), `start_at < end_at` | D-022, D-030 |
 | `status` | TEXT | 불가 | `'reserved'` | — | `IN ('reserved','cancelled')` | F-12, D-004 |
-| `customer_name` | TEXT | 불가 | — | — | 길이·빈 값 **[결정 필요: PRD에 없음]** | D-021 |
+| `customer_name` | TEXT | 불가 | — | — | 길이·빈 값 **[결정 필요: PRD에 없음]** | D-021, D-068 |
+| `customer_account_id` | INTEGER | 가능 | `NULL` | FK → `accounts.id` | — | D-045, D-057 |
 
 - 취소는 행을 지우지 않고 `status`를 `cancelled`로 바꾼다. (D-004) 취소는 되돌리지 않는다. 이 상태 전이 판정(C-7)은 공통 검증이 하고 저장소는 하지 않는다. (ARCHITECTURE 5절)
 - 예약에 담는 항목은 위가 전부다. (D-021) 생성 시각·취소 시각은 담지 않는다. 확장 1의 통계(R-016)에 필요할 수 있어 제안만 해 둔다. (9절)
-- **회원 계정**: 회원 예약이면 계정을 가리키는 컬럼을 채우고, 비회원 예약이면 비워 둔다(D-045). 컬럼 이름·타입·참조 대상은 4단계에서 정한다. 겹침 판정(3절)은 이 컬럼을 보지 않는다.
+- **회원 계정**: 회원 예약이면 그 회원의 계정이고, 비회원 예약이면 `NULL`이다. 운영자·관리자 세션으로 만든 예약도 `NULL`이다. 겹침 판정(3절)은 이 컬럼을 보지 않는다. (D-045, D-061)
+- 회원이 이름을 생략하면 `customer_name`에 계정 이름을 저장한다. (D-068) 비회원 예약은 나중에 계정에 연결하지 않는다. (D-069)
+
+### 2.4 `accounts` — 계정
+| 컬럼 | 타입 | NULL | 기본값 | 키 | 제약 | 근거 |
+|---|---|---|---|---|---|---|
+| `id` | INTEGER | 불가 | 자동 증가 | PK | — | 내부 키, API에 내보내지 않음 |
+| `email` | TEXT | 불가 | — | UNIQUE | `email = lower(email)`, `length(email) BETWEEN 3 AND 254`, `instr(email, '@') > 1` | D-056 |
+| `password_hash` | TEXT | 불가 | — | — | `password_hash GLOB '$argon2id$*'` | D-063 |
+| `name` | TEXT | 불가 | — | — | `name = trim(name)`, `length(name) BETWEEN 1 AND 50` | D-059 |
+| `role` | TEXT | 불가 | — | — | `IN ('admin','operator','customer')` | D-042 |
+| `operator_status` | TEXT | 가능 | — | — | `role = 'operator'`이면 `IN ('pending','approved','suspended')`, 아니면 `NULL` | D-043, D-053 |
+| `booking_slug` | TEXT | 가능 | — | UNIQUE | `role = 'operator'`이면 필수, 아니면 `NULL`. 영문 소문자·숫자·`-` 3~30자, `-`로 시작하거나 끝나지 않음 | D-046, D-059 |
+| `created_at` | TEXT | 불가 | — | — | 시각 형식 (4.4) | 운영자 목록의 정렬 (D-067) |
+
+- 관리자는 1명이다. 부분 유일 인덱스 `UNIQUE (role) WHERE role = 'admin'`이 두 번째 관리자를 막는다. (D-050)
+- 이메일은 API가 앞뒤 공백을 지우고 소문자로 바꾼 뒤 저장·비교한다. (D-056)
+- 비밀번호 값은 `pwdlib`이 만든 문자열이다. 알고리즘·설정·salt가 함께 들어 있어 salt 컬럼을 따로 두지 않는다. (D-063)
+- 운영자는 가입하면 `pending`이고, 관리자가 `approved` 또는 `suspended`로 바꾼다. 정지된 운영자는 다시 승인하지 않는다. (D-043, D-067)
+- 계정 삭제는 두지 않는다. 그래서 외래키의 삭제 동작(`ON DELETE`)도 정하지 않는다. **[결정 필요: PRD에 없음]**
+
+### 2.5 `sessions` — 로그인 세션
+| 컬럼 | 타입 | NULL | 기본값 | 키 | 제약 | 근거 |
+|---|---|---|---|---|---|---|
+| `token_hash` | TEXT | 불가 | — | PK | `length = 64`, 소문자 16진수 | D-049 |
+| `account_id` | INTEGER | 불가 | — | FK → `accounts.id` | — | D-049 |
+| `created_at` | TEXT | 불가 | — | — | 시각 형식 (4.4) | D-049 |
+| `expires_at` | TEXT | 불가 | — | — | 시각 형식 (4.4), `created_at < expires_at` | D-049 (7일) |
+
+- `token_hash`는 `HMAC-SHA256(SLOTFLOW_SESSION_SECRET, 토큰 원문)`이다. 토큰 원문과 비밀값은 저장하지 않는다. (D-049)
+- 만료된 행은 요청 때 지운다. 로그아웃하면 그 행을, 운영자를 정지하거나 비밀번호를 재설정하면 그 계정의 행을 모두 지운다. (D-049, D-053, D-059)
+
+### 2.6 `login_failures` — 로그인 실패 기록
+| 컬럼 | 타입 | NULL | 기본값 | 키 | 제약 | 근거 |
+|---|---|---|---|---|---|---|
+| `email` | TEXT | 불가 | — | PK | `email = lower(email)` | D-062 |
+| `failed_count` | INTEGER | 불가 | — | — | `BETWEEN 1 AND 5` | D-062 |
+| `last_failed_at` | TEXT | 불가 | — | — | 시각 형식 (4.4) | D-062 |
+| `locked_until` | TEXT | 가능 | `NULL` | — | 시각 형식 (4.4). `failed_count = 5`일 때만 값이 있음 | D-062 |
+
+- 계정이 없는 이메일도 똑같이 기록하므로 `accounts`를 외래키로 가리키지 않는다. (D-054, D-062)
+- 로그인에 성공하거나 비밀번호를 재설정하면 그 이메일의 행을 지운다. 잠금이 풀린 뒤의 실패는 1번부터 다시 센다. (D-062)
 
 ## 3. 겹침 보장 (D-003, D-032, D-035)
 
@@ -114,6 +161,11 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
 | 입력 비교 | 고객이 입력한 코드를 대문자로 바꿔 비교한다 |
 | 저장소 검사 | `length = 10` 이고 위 31자 밖의 문자가 없음 |
 
+### 4.4 계정·세션의 시각
+- 예약 시각(4.1)과 같은 `YYYY-MM-DDTHH:MM:SS+09:00` 고정 25자 TEXT지만 30분 단위 제한이 없고 초까지 쓴다.
+- 저장소의 형식 검사: `GLOB '[0-9][0-9][0-9][0-9]-[0-1][0-9]-[0-3][0-9]T[0-2][0-9]:[0-5][0-9]:[0-5][0-9]+09:00'`
+- 만료·잠금 판정은 문자열 비교로 한다. (4.1과 같은 이유)
+
 ## 5. 인덱스
 
 | 인덱스 | 대상 | 쓰는 곳 |
@@ -121,6 +173,12 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
 | `reservations(resource_id, start_at)` | 예약 | 겹침 판정(3절), 날짜별 칸 조회(API-SPEC 4.2), 운영자 예약 목록의 자원·날짜 필터(API-SPEC 5.4) |
 | `reservations(reservation_code)` | 예약 | `UNIQUE` 제약이 만드는 인덱스. 내 예약 조회·취소 (API-SPEC 5.2, 5.3) |
 | `operating_hours(resource_id, weekday)` | 운영시간 | 기본키가 만드는 인덱스. 운영시간 판정(C-1), 칸 계산 |
+| `resources(owner_account_id)` | 자원 | 운영자의 자기 자원 목록, 소유 확인(C-9) |
+| `reservations(customer_account_id)` | 예약 | 회원의 내 예약 목록 (D-068) |
+| `accounts(email)`, `accounts(booking_slug)` | 계정 | `UNIQUE` 제약이 만드는 인덱스. 로그인, 예약 주소 조회, 운영자 승인·정지 |
+| `accounts(role) WHERE role = 'admin'` | 계정 | 부분 유일 인덱스. 관리자 1명 (D-050) |
+| `sessions(token_hash)`, `sessions(account_id)` | 세션 | 기본키로 세션 확인, 계정별 세션 삭제 (D-053) |
+| `login_failures(email)` | 로그인 실패 | 기본키가 만드는 인덱스. 잠금 확인 (D-062) |
 
 - 날짜 필터는 `start_at >= '<날짜>T00:00:00+09:00' AND start_at < '<다음 날>T00:00:00+09:00'`로 비교한다. (4.1)
 - 상태 필터(`status`)는 자원·날짜로 좁힌 뒤 거르므로 따로 인덱스를 두지 않는다.
@@ -129,7 +187,7 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
 
 | 값 | 어디에 있나 | 근거 |
 |---|---|---|
-| 비밀번호 원문, 세션 토큰 원문 | 저장하지 않는다. 비밀번호는 argon2id 값, 세션은 `SLOTFLOW_SESSION_SECRET`을 키로 한 HMAC 값만 저장한다 | D-055, D-049 |
+| 비밀번호 원문, 세션 토큰 원문 | 저장하지 않는다. 비밀번호는 argon2id 값, 세션은 `SLOTFLOW_SESSION_SECRET`을 키로 한 HMAC 값만 저장한다 | D-063, D-049 |
 | 세션 비밀값 | `backend/.env`(Git 제외). 항목 이름만 `backend/.env.example`에 둔다 | D-049 |
 | 날짜별 30분 칸(`slots`) | 요청 때 운영시간과 `reserved` 예약으로 계산 | D-020, API-SPEC 4.2 |
 | 거부 사유(`error`) | 요청마다 만들어 응답 | D-006 |
@@ -154,11 +212,12 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
 | 예약 코드 표시 (예약하기 성공), 입력·표시 (내 예약) | `reservation_code` | `reservations.reservation_code` | 4.3 | D-045, D-033 |
 | 날짜 필터 (예약 목록) | `date` (쿼리) | `reservations.start_at` 범위 비교 | `YYYY-MM-DD` | D-013 |
 | 거부 사유 표시 (모든 화면) | `error.code`, `error.message` | 저장하지 않음 | API-SPEC 1.6 | D-006 |
-| 로그인·가입 입력 (로그인, 가입) | 4단계에서 설계 | 계정 테이블 (4단계) | 이메일·비밀번호·이름 (D-056, D-059). `DATA-MIGRATION-PLAN.md` 2.1 | D-042, D-047 |
-| 운영자 예약 주소명 (예약하기 진입, 가입) | 4단계에서 설계 | 계정 테이블 (4단계) | 영문 소문자·숫자·`-` 3~30자 (D-059). `DATA-MIGRATION-PLAN.md` 2.1 | D-046 |
-| 운영자 상태 (운영자 관리) | 4단계에서 설계 | 계정 테이블 (4단계) | 승인 대기 · 승인 · 정지 | D-043 |
-| 자원의 소유 운영자 (자원 관리) | (응답에 담을지 4단계) | `resources`의 소유 운영자 컬럼 (4단계) | — | D-044 |
-| 회원 예약 연결 (내 예약 목록) | (4단계) | `reservations`의 회원 계정 컬럼 (4단계) | 비회원이면 비어 있음 | D-045 |
+| 로그인·가입 입력 (로그인, 가입) | `email`, `password`, `name`, `role` | `accounts.email`, `accounts.password_hash`(argon2id 값), `accounts.name`, `accounts.role` | 이메일·비밀번호(8~128자)·이름(1~50자) | D-056, D-059 |
+| 운영자 예약 주소명 (예약하기 진입, 가입) | `booking_slug`, `operator`(쿼리) | `accounts.booking_slug` | 영문 소문자·숫자·`-` 3~30자 | D-046, D-059 |
+| 운영자 상태 (운영자 관리, 운영자 구역) | `operator_status` | `accounts.operator_status` | `pending` / `approved` / `suspended` | D-043, D-067 |
+| 자원의 소유 운영자 (자원 관리) | 응답에 담지 않음 (세션의 운영자) | `resources.owner_account_id` | 계정 내부 키 | D-044 |
+| 회원 예약 표시 (예약하기, 내 예약 목록) | `is_member` | `reservations.customer_account_id` | 비회원이면 `NULL` | D-045, D-068 |
+| 로그인 상태 (모든 로그인 화면) | 쿠키 `slotflow_session` | `sessions.token_hash` (HMAC 값) | 7일 | D-049 |
 
 짝 없음:
 | 값 | 없는 쪽 | 이유 |
@@ -173,16 +232,16 @@ ARCHITECTURE 4절의 논리적 저장 구조를 SQLite 테이블 수준(컬럼, 
 
 | D-ID | 정한 것 |
 |---|---|
-| D-029 | 테이블은 `resources`, `operating_hours`, `reservations` 셋이고 모두 `STRICT`다. 예약은 예약 코드와 따로 내부 키 `id`를 둔다. 이용시간은 `> 0` |
+| D-029 | 테이블은 `resources`, `operating_hours`, `reservations`로 시작했고(D-057, D-062로 여섯) 모두 `STRICT`다. 예약은 예약 코드와 따로 내부 키 `id`를 둔다. 이용시간은 `> 0` |
 | D-030 | 시각은 API 형식 그대로 고정 25자 TEXT로 저장하고 문자열로 비교한다 |
 | D-031 | 운영시간의 시각은 `HH:MM`, 30분 단위, `00:00`~`23:30`. 자정 종료는 허용하지 않는다 |
 | D-032 | 겹침은 `BEGIN IMMEDIATE` 쓰기 단위와 INSERT·UPDATE 트리거로 보장한다. 연결마다 `foreign_keys=ON`, `busy_timeout=5000`, `journal_mode=WAL` |
 | D-033 | 예약 코드는 헷갈리는 문자를 뺀 31자 중 10자, `secrets`로 생성, `UNIQUE`, 입력은 대문자로 바꿔 비교 (Q-21) |
-| D-034 | DB 파일은 `backend/data/slot-flow.db`, 서버 시작 때 테이블을 만들고, Git에 넣지 않는다 |
+| D-034 | DB 파일은 `backend/data/slot-flow.db`, 서버 시작 때 테이블을 만들고(방법은 D-064), Git에 넣지 않는다 |
 | D-035 | 쓰는 요청은 입력 형식 검사 뒤, 저장소를 읽는 첫 판정 전에 쓰기 단위를 시작한다 |
 | D-036 | 자원 입력의 거부 기준: 30분 단위·범위, 최소 ≤ 최대, 열림 < 닫힘, 일곱 요일 키. 저장소 CHECK는 최후 방어 |
 
 ## 9. 결정 필요 모아 보기
 
 원본은 `DECISIONS.md`의 "결정 필요 모아 보기"다. 이 문서에서는 따로 관리하지 않는다.
-이 문서에 영향을 주는 열린 질문: Q-14(경계 시각, 저장 구조에는 영향 없음), Q-15, Q-22(휴무일·예외일 세부 규칙, 저장 구조에 영향), Q-25(가입 항목), Q-26(비회원 예약 연결), Q-27(정지된 운영자), Q-17, Q-20, 자원 이름의 길이·빈 값·중복, 취소 마감 N의 범위, 고객 이름의 길이·빈 값, 생성·취소 시각 컬럼(제안)
+이 문서에 영향을 주는 열린 질문: Q-14(경계 시각, 저장 구조에는 영향 없음), Q-15, Q-22(휴무일·예외일 세부 규칙, 저장 구조에 영향), Q-17, Q-20, 자원 이름의 길이·빈 값·중복, 취소 마감 N의 범위, 고객 이름의 길이·빈 값, 생성·취소 시각 컬럼(제안)

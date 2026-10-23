@@ -33,6 +33,7 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 | 409 | `BOOKING_SLUG_TAKEN` | 이미 쓰는 예약 주소명 | D-060 |
 | 404 | `OPERATOR_NOT_FOUND` | 고객이 조회한 예약 주소명의 승인된 운영자가 없음 | D-059, 3절 |
 | 429 | `TOO_MANY_ATTEMPTS` | 같은 이메일로 5번 연속 로그인 실패, 10분 동안 잠김 | D-062 |
+| 409 | `INVALID_OPERATOR_STATE` | 정지된 운영자를 다시 승인하려 함 | D-067 |
 
 그 밖의 거부는 API-SPEC 1.6의 코드(`INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `OPERATOR_NOT_APPROVED`, `OPERATOR_SUSPENDED`)를 쓴다.
 
@@ -104,9 +105,9 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
    1. 입력 형식 (`INVALID_INPUT`). 이메일은 2.1처럼 정리한다.
    2. 그 이메일의 `login_failures`가 잠겨 있으면(`locked_until > 지금`) 비밀번호를 확인하지 않고 `TOO_MANY_ATTEMPTS`. 계정이 있든 없든 같다. (D-062)
    3. 이메일로 계정을 찾는다. 없으면 미리 만들어 둔 가짜 argon2 값으로 검증을 한 번 해서 응답 시간을 맞춘다. (D-054)
-   4. `PasswordHasher.verify`로 비밀번호를 확인한다. 계정이 없거나 틀리면 쓰기 단위 안에서 `login_failures`를 1 올리고(5번째면 10분 잠금) `UNAUTHENTICATED`. 5번째 실패의 응답도 `UNAUTHENTICATED`이고, 그다음 요청부터 `TOO_MANY_ATTEMPTS`다. (D-054, D-062, DATA-MIGRATION-PLAN 2.3)
+   4. `PasswordHash.verify_and_update`로 비밀번호를 확인한다. (D-063) 계정이 없거나 틀리면 쓰기 단위 안에서 `login_failures`를 1 올리고(5번째면 10분 잠금) `UNAUTHENTICATED`. 5번째 실패의 응답도 `UNAUTHENTICATED`이고, 그다음 요청부터 `TOO_MANY_ATTEMPTS`다. (D-054, D-062, DATA-MIGRATION-PLAN 2.3)
    5. 정지된 운영자면 `OPERATOR_SUSPENDED`. 비밀번호가 맞은 뒤에만 알린다. 그래야 비밀번호를 모르는 사람이 정지 여부를 알 수 없다. (D-053)
-   6. `check_needs_rehash`가 참이면 비밀번호 값을 새로 계산한다. (D-055)
+   6. 4번의 `verify_and_update`가 새 비밀번호 값을 돌려줬으면(설정이 바뀐 경우) 그 값을 저장한다. (D-063)
    7. 쓰기 단위 시작 → 그 이메일의 `login_failures` 행 삭제, 새 비밀번호 값 저장(6번), 세션 저장(`expires_at` = 지금 + 7일) → 쓰기 단위 끝
    8. `Set-Cookie`로 세션 쿠키를 보낸다. (1.5)
    - 같은 계정의 기존 세션은 지우지 않는다(다른 브라우저의 로그인 유지).
@@ -137,6 +138,24 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 8. **실패 응답**: API-SPEC 1.6 공통 규칙
 - 화면 표시용이다. 실제 차단은 각 요청의 진입 단계가 한다. (D-005)
 
+### 2.5 운영자 관리 (관리자, API-SPEC 2절 #13·#14)
+| 요청 | 하는 일 | 성공 응답 | 거부 응답 |
+|---|---|---|---|
+| `GET /api/admin/operators` | 운영자와 상태를 가입 순으로 읽는다 | `200`, `{ "operators": [<계정 객체>, …] }` | `401 UNAUTHENTICATED`, `403 FORBIDDEN` |
+| `POST /api/admin/operators/{예약 주소명}/approve` | 승인 대기 → 승인 | `200`, `{ "operator": <계정 객체> }` | 위 + `404 OPERATOR_NOT_FOUND`, `409 INVALID_OPERATOR_STATE`(정지된 운영자) |
+| `POST /api/admin/operators/{예약 주소명}/suspend` | 승인 대기·승인 → 정지. 같은 쓰기 단위에서 그 운영자의 세션을 모두 지운다 (D-053) | 같음 | 위 + `404 OPERATOR_NOT_FOUND` |
+
+- 관리자 세션만 받는다. 운영자는 내부 키 대신 예약 주소명으로 가리킨다. (D-067)
+- 이미 그 상태이면 바꾸지 않고 같은 응답을 준다.
+
+### 2.6 회원 예약과 내 예약 목록 (API-SPEC 2절 #7·#15)
+| 요청 | 바뀌는 것 | 거부 응답 |
+|---|---|---|
+| `POST /api/reservations` | 유효한 회원 고객 세션이면 `customer_account_id`에 연결한다. 회원은 `customer_name`을 생략할 수 있고, 생략하면 계정 이름을 저장한다. 응답에 `is_member`를 담는다 (D-051, D-061, D-068) | 비회원이 이름을 보내지 않으면 `400 INVALID_INPUT` |
+| `GET /api/me/reservations` | 로그인한 회원 본인의 예약을 시작 시각 순으로, 취소된 예약까지 `{ "reservations": [<예약 객체>, …] }`로 응답한다 (D-045) | `401 UNAUTHENTICATED`, `403 FORBIDDEN`(회원 고객이 아님) |
+
+- 비회원으로 한 예약은 계정에 연결하지 않는다. (D-069)
+
 ---
 
 ## 3. 막을 요청
@@ -148,7 +167,7 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 | `POST /api/resources` | 누구나 | 승인된 운영자 | 세션 없음 `401 UNAUTHENTICATED` → 운영자 아님 `403 FORBIDDEN` → 승인 대기 `403 OPERATOR_NOT_APPROVED` → 정지 `403 OPERATOR_SUSPENDED` |
 | `PUT /api/resources/{resource_id}` | 누구나, 모든 자원 | 승인된 운영자, 자기 자원만 | 위와 같음 → 다른 운영자의 자원 `404 RESOURCE_NOT_FOUND` (C-9) |
 | `GET /api/operator/reservations` | 누구나, 모든 자원 | 승인된 운영자, 자기 자원만 | 위와 같음 → 다른 운영자의 자원 `404 RESOURCE_NOT_FOUND` (C-9) |
-| `GET /api/resources` | 누구나, 모든 자원 | 운영자: 자기 자원만. 고객: `?operator={예약 주소명}`의 운영자 자원 | `operator` 쿼리가 없으면 운영자 요청으로 보고 위와 같이 막는다(`401`·`403`). 쿼리가 있으면 세션을 보지 않고, 그 주소명의 승인된 운영자가 없으면 `404 OPERATOR_NOT_FOUND`(승인 대기 포함). 정지된 운영자의 주소: **[결정 필요 Q-27]** (D-059) |
+| `GET /api/resources` | 누구나, 모든 자원 | 운영자: 자기 자원만. 고객: `?operator={예약 주소명}`의 운영자 자원 | `operator` 쿼리가 없으면 운영자 요청으로 보고 위와 같이 막는다(`401`·`403`). 쿼리가 있으면 세션을 보지 않고, 그 주소명의 승인된 운영자가 없으면 `404 OPERATOR_NOT_FOUND`(승인 대기 포함). 정지된 운영자의 주소도 `404 OPERATOR_NOT_FOUND` (D-059, D-065) |
 | `POST /api/auth/signup` (`role: "admin"`) | — (새 요청) | 관리자 계정은 서버 명령으로만 | `400 INVALID_INPUT` (D-050) |
 
 - 정지된 운영자는 세션이 지워져 보통 `401`을 받는다. `403 OPERATOR_SUSPENDED`는 정지와 요청이 거의 같은 때 들어온 경우를 위한 것이다. (D-052, D-053)
@@ -172,7 +191,7 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 | 세션 확인 (1.6) | 모든 요청의 진입 단계 (FastAPI 의존성 하나) | D-005, D-007 |
 | 역할·운영자 상태 (C-5) | 운영자·관리자 요청의 진입 단계 | D-005, D-043, D-052 |
 | 운영자 소유 (C-9) | 자원·예약을 다루는 운영자 요청. 자원 존재 확인과 같은 쓰기 단위 안 | D-044, D-035 |
-| 비밀번호 계산·검증 | 계정 서비스 한 곳 (`argon2.PasswordHasher` 하나를 재사용) | D-007, D-055 |
+| 비밀번호 계산·검증 | 계정 서비스 한 곳 (`pwdlib.PasswordHash.recommended()` 하나를 재사용) | D-007, D-063 |
 
 ---
 
@@ -207,6 +226,4 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 
 ## 8. 결정 필요
 
-- Q-27: 정지된 운영자의 예약 주소로 들어온 고객 조회
-- 회원 예약의 `customer_name`: 따로 보내는지, 계정 이름을 쓰는지 (API-SPEC 5.1)
 - 예약 주소명 변경 (PRD에 없음)

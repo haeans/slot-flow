@@ -3,5 +3,7 @@ frontend/dist/
 backend/.venv/
 .env
 *.db
+*.db-wal
+*.db-shm
 *.sqlite3
 __pycache__/

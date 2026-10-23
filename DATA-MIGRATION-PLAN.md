@@ -1,7 +1,7 @@
 # DATA-MIGRATION-PLAN — 로그인 기능의 저장 구조 변경 (slot-flow)
 
 근거 문서: `PRD.md`, `DECISIONS.md`, `DATA-MODEL.md`, `API-SPEC.md`, `API-SPEC-CHANGE.md`. US-xxx, Q-xxx, D-xxx, C-x는 이 문서들의 ID를 그대로 쓴다.
-PRD Must의 R-018~R-023(계정·로그인)을 위해 저장 구조를 바꾸는 계획이다. 결정은 D-055~D-057, D-059, D-062다.
+PRD Must의 R-018~R-023(계정·로그인)을 위해 저장 구조를 바꾸는 계획이다. 결정은 D-055~D-057, D-059, D-062~D-064다.
 아직 정해지지 않은 것은 **[결정 필요 Q-xx]** 또는 **[결정 필요: PRD에 없음]**으로 표시하고 이 문서에서 정하지 않는다.
 
 ---
@@ -19,7 +19,7 @@ PRD Must의 R-018~R-023(계정·로그인)을 위해 저장 구조를 바꾸는 
 
 - 테이블은 셋에서 여섯이 된다. 모든 테이블은 그대로 `STRICT`다. (D-029, D-057)
 - 연결 설정(`foreign_keys=ON`, `busy_timeout=5000`, `journal_mode=WAL`)은 그대로다. (D-032)
-- 기존 DB 파일은 지우고 새로 만든다. 기존 데이터는 옮기지 않는다. (D-057, 5절)
+- 구조는 alembic 절차로 만들고 바꾼다. 계정 테이블은 0002, 소유자 컬럼은 0003(5단계), 회원 컬럼은 0004(7단계)에서 더한다. 기존 개발용 DB는 지우고 0001부터 새로 만들었다. (D-057, D-064, 5절)
 
 ## 2. 새 테이블
 
@@ -37,7 +37,7 @@ PRD Must의 R-018~R-023(계정·로그인)을 위해 저장 구조를 바꾸는 
 
 - **관리자는 1명**: 부분 유일 인덱스 `UNIQUE (role) WHERE role = 'admin'`로 저장소가 두 번째 관리자를 막는다. (D-050)
 - **이메일**: API가 앞뒤 공백을 지우고 소문자로 바꾼 뒤 저장·비교한다. CHECK는 최후 방어다. 형식 검사의 자세한 기준은 API-SPEC-CHANGE 2.1에 있다. (D-036과 같은 원칙)
-- **비밀번호 값**: `argon2-cffi`가 만든 문자열을 그대로 저장한다. 그 안에 알고리즘, 설정값, salt가 들어 있어 salt 컬럼을 따로 두지 않는다. 예: `$argon2id$v=19$m=65536,t=3,p=4$<salt>$<hash>` (D-055)
+- **비밀번호 값**: `pwdlib`(안에서 argon2-cffi를 씀)이 만든 문자열을 그대로 저장한다. 그 안에 알고리즘, 설정값, salt가 들어 있어 salt 컬럼을 따로 두지 않는다. 예: `$argon2id$v=19$m=65536,t=3,p=4$<salt>$<hash>` (D-063)
 - **운영자 상태**: 가입하면 `pending`이 되고, 관리자가 `approved` 또는 `suspended`로 바꾼다. (D-043)
 - **예약 주소명**: 운영자의 고객 예약 주소 `/r/{booking_slug}`에 쓴다(D-046). 고객의 자원 목록 조회가 이 컬럼으로 운영자를 찾는다(API-SPEC-CHANGE 3절). 주소명을 나중에 바꿀 수 있는지: **[결정 필요: PRD에 없음]**
 - **비밀번호 재설정**: 관리자가 서버 명령으로 `password_hash`를 바꾸고, 그 계정의 `sessions`와 `login_failures` 행을 지운다. (D-059)
@@ -88,7 +88,7 @@ PRD Must의 R-018~R-023(계정·로그인)을 위해 저장 구조를 바꾸는 
 - 회원 예약이면 그 회원의 계정이고, 비회원 예약이면 `NULL`이다.
 - 겹침 트리거(DATA-MODEL 3절)는 이 컬럼을 보지 않는다. 트리거는 바꾸지 않는다.
 - 인덱스 `reservations(customer_account_id)`: 회원의 내 예약 목록(API-SPEC 2절 #15)에 쓴다.
-- 비회원 예약을 나중에 계정에 연결할지: **[결정 필요 Q-26]**
+- 비회원 예약은 나중에 계정에 연결하지 않는다. (D-069)
 
 ## 4. 값의 저장 형식
 
@@ -102,56 +102,61 @@ PRD Must의 R-018~R-023(계정·로그인)을 위해 저장 구조를 바꾸는 
 ## 5. 이전 절차
 
 ### 5.1 방식
-기존 DB를 지우고 새 구조로 만든다. (D-057)
+DB 구조는 alembic 절차로만 만들고 바꾼다. (D-064)
 
-| 검토한 방식 | 결과 | 이유 |
-|---|---|---|
-| `ALTER TABLE … ADD COLUMN` | 쓰지 않음 | `owner_account_id`는 기본값 없는 `NOT NULL` 외래키다. SQLite는 행이 있는 테이블에 이런 컬럼을 더할 수 없다 |
-| 새 테이블을 만들고 기존 행을 옮김 | 쓰지 않음 | 기존 자원의 주인이 될 운영자가 없다. 기존 데이터는 개발용이다 |
-| **DB 파일을 지우고 새로 만듦** | **채택** | 사용자 결정(2026-10-22). 가장 단순하고, 옛 구조가 남지 않는다 |
+| 항목 | 내용 |
+|---|---|
+| 절차 위치 | `backend/migrations/versions/` |
+| 설정 | `backend/alembic.ini`, `backend/migrations/env.py`. DB 경로는 `alembic.ini`에 적지 않고 `app.storage.db`를 따른다. 테스트의 `set_db_path`도 그대로 적용된다 |
+| 절차 작성 | SQLAlchemy 모델을 두지 않고 `op.execute`로 SQL을 직접 쓴다. 자동 생성(autogenerate)과 batch 모드는 `STRICT`와 트리거를 잃을 수 있어 쓰지 않는다 |
+| 절차 ID | `--rev-id 0001`처럼 순서가 보이는 ID를 붙인다 |
+| 적용 시점 | 서버를 시작할 때 `init_db()`가 `upgrade head`를 부른다. DB 파일이 없으면 새로 만든다. 직접 적용할 때는 `backend`에서 `uv run alembic upgrade head` |
+| 기록 | 적용한 절차는 DB의 `alembic_version` 테이블에 남는다 |
+| 연결 설정 | 절차를 적용하는 연결도 `foreign_keys=ON`을 켠다. `journal_mode=WAL`은 적용 뒤 `connect()`가 켠다 (D-032) |
+| 주의 | SQLite의 DDL은 alembic이 하나의 쓰기 단위로 묶지 않는다(non-transactional DDL). 절차가 중간에 실패하면 일부만 적용될 수 있으므로, 실패하면 원인을 고치고 DB를 확인한 뒤 다시 적용한다 |
+| 주의 | `alembic.ini`는 ASCII로만 쓴다. alembic이 시스템 인코딩(Windows는 cp949)으로 읽어 한국어 주석이 있으면 실패한다 |
 
-### 5.2 순서
+### 5.2 절차 목록
+| 절차 | 단계 | 내용 | 방법 | 상태 |
+|---|---|---|---|---|
+| `0001` initial schema | — | M1의 구조: `resources`, `operating_hours`, `reservations`, 인덱스, 겹침 트리거 | `CREATE` SQL (이전 `db.py`의 `SCHEMA` 그대로) | 적용 |
+| `0002` add accounts sessions login_failures | 1 저장 구조 | `accounts`, `sessions`, `login_failures`, 관리자 1명 인덱스, `sessions(account_id)` 인덱스 (2절) | `CREATE` SQL. 기존 테이블은 바꾸지 않음 | 적용 |
+| `0003` add resources owner | 5 역할·소유 검사 | `resources.owner_account_id` 필수 컬럼, `resources(owner_account_id)` 인덱스 (3.1) | 기본값 없는 `NOT NULL` 외래키는 `ALTER`로 더할 수 없어, 새 테이블을 만들어 행을 옮기고 바꿔 끼운다. `STRICT`, 외래키, 트리거를 다시 만든다 | 작성 (실제 DB에는 아직 적용 안 함) |
+| `0004` add reservations customer account | 7 회원 예약 | `reservations.customer_account_id` (NULL 허용), 인덱스 (3.2) | `ALTER TABLE ADD COLUMN` | 작성 (실제 DB에는 아직 적용 안 함) |
+
+- 소유자 컬럼(0003)과 회원 컬럼(0004)을 그 기능의 단계에서 더하므로, 1~4단계 동안 기존 자원 등록과 예약이 그대로 동작한다.
+- **0003의 기존 자원**: 소유자를 정할 수 없는 자원이 있으면 절차가 멈추고 "소유 운영자가 없는 자원이 있습니다"를 출력한다. 절차는 데이터를 지우지 않는다. 개발용 자원이면 직접 정리하고 다시 적용한다. (D-064)
+- 기존 개발용 DB(구조 버전이 없던 파일)는 2026-10-22에 지웠다. 새 DB는 0001부터 적용해 만들었다. (D-057)
+
+### 5.3 순서 (절차를 더할 때마다)
 | # | 할 일 | 확인 |
 |---|---|---|
-| 1 | 서버를 멈춘다 | DB 파일을 쥐고 있는 프로세스가 없다 |
-| 2 | `backend/.env`에 `SLOTFLOW_SESSION_SECRET`이 있는지 확인한다. 없으면 만든다 (6절) | 값을 화면·로그·채팅에 출력하지 않는다 |
-| 3 | `backend/data/slot-flow.db`, `slot-flow.db-wal`, `slot-flow.db-shm`을 지운다 | 파일이 없다 |
-| 4 | 새 구조의 서버 코드로 서버를 시작한다. 아래 순서로 테이블을 만든다: `accounts` → `sessions` → `login_failures` → `resources` → `operating_hours` → `reservations` → 인덱스 → 겹침 트리거 | 외래키가 가리키는 테이블을 먼저 만든다 |
-| 5 | 같은 쓰기 단위 안에서 `PRAGMA user_version = 1`로 적는다 | `PRAGMA user_version`이 `1` |
-| 6 | 관리자 계정을 서버 명령으로 만든다 (D-050). 비밀번호는 명령을 실행할 때 입력받는다 | `accounts`에 `role = 'admin'` 행이 하나 |
-| 7 | 테스트를 실행한다 (5.4) | 모두 통과. 실패하면 멈춘다 (AGENTS.md) |
+| 1 | `backend/.env`에 `SLOTFLOW_SESSION_SECRET`이 있는지 확인한다. 없으면 만든다 (6절) | 값을 화면·로그·채팅에 출력하지 않는다 |
+| 2 | 절차 파일을 만든다: `uv run alembic revision --rev-id 000N -m "<내용>"` | `migrations/versions/000N_<내용>.py` |
+| 3 | `upgrade()`와 `downgrade()`를 SQL로 쓴다 | 되돌리기를 비워 두지 않는다 |
+| 4 | 테스트를 실행한다 (5.4). 테스트는 임시 DB에 `upgrade head`를 적용한다 | 모두 통과. 실패하면 멈춘다 (AGENTS.md) |
+| 5 | 실제 DB에 적용한다: 서버를 다시 시작하거나 `uv run alembic upgrade head` | `uv run alembic current`가 새 절차 ID |
+| 6 | 관리자 계정이 없으면 서버 명령으로 만든다 (D-050, 2단계 이후) | `accounts`에 `role = 'admin'` 행이 하나 |
 
-### 5.3 구조 버전
-| `user_version` | 구조 | 서버 시작 때 동작 |
-|---|---|---|
-| 테이블이 없음 | — | 4번 순서대로 만들고 `1`로 적는다 |
-| `0` + 테이블이 있음 | 이전 구조 (테이블 셋) | **시작하지 않는다.** "옛 DB 구조입니다. DATA-MIGRATION-PLAN 5.2를 따라 DB를 다시 만드세요"를 출력한다 |
-| `1` | 이 문서의 구조 | 정상 시작 |
-| `1`보다 큼 | 이 코드보다 새 구조 | 시작하지 않는다 |
-
-- `CREATE TABLE IF NOT EXISTS`는 이미 있는 테이블에 컬럼을 더하지 않는다. 버전 검사가 없으면 옛 `resources`에 소유자 없이 쓰게 된다. (D-057)
-- 앞으로 구조가 바뀌면(Q-25의 이름·예약 주소명 등) 버전을 올리고 이 문서에 그 단계를 더한다.
-
-### 5.4 확인 항목 (테스트)
-| # | 확인 | 기대 |
-|---|---|---|
-| 1 | 새 DB의 테이블 목록 | 여섯 개, 모두 `STRICT` |
-| 2 | 두 번째 관리자 INSERT | 거부 |
-| 3 | 대문자가 섞인 이메일 INSERT | 거부 (CHECK) |
-| 4 | `$argon2id$`로 시작하지 않는 `password_hash` INSERT | 거부 |
-| 5 | `role = 'customer'`인데 `operator_status`가 있는 행 | 거부 |
-| 6 | `owner_account_id`가 없는 자원 INSERT | 거부 |
-| 6-1 | 예약 주소명이 없는 운영자, 예약 주소명이 있는 고객 INSERT | 거부 |
-| 6-2 | 같은 예약 주소명 두 번 INSERT, 대문자·`_`가 든 주소명 | 거부 |
-| 6-3 | `failed_count = 6`인 `login_failures` | 거부 |
-| 7 | 없는 계정을 가리키는 세션·자원·예약 INSERT | 거부 (외래키) |
-| 8 | 비회원 예약 INSERT (`customer_account_id = NULL`) | 성공 |
-| 9 | 겹침 트리거 (기존 테스트) | 그대로 통과 |
-| 10 | `user_version = 0`인 옛 DB로 서버 시작 | 시작하지 않음 |
+### 5.4 확인 항목 (테스트, `backend/tests/test_migrations.py`)
+| # | 확인 | 기대 | 절차 |
+|---|---|---|---|
+| 1 | `upgrade head` 뒤의 테이블 목록 | 여섯 개, 모두 `STRICT`, `alembic_version`이 최신 | 0002 |
+| 2 | `downgrade base` 뒤 다시 `upgrade head` | 테이블이 모두 지워졌다가 다시 생김 | 0001, 0002 |
+| 3 | pwdlib이 만든 비밀번호 값 | `$argon2id$`로 시작하고 저장됨 | 0002 |
+| 4 | 두 번째 관리자 INSERT | 거부 | 0002 |
+| 5 | 대문자·`@` 없는 이메일, `$argon2id$`가 아닌 `password_hash` | 거부 | 0002 |
+| 6 | 운영자 상태·예약 주소명이 역할과 맞지 않는 행 (고객인데 값이 있음, 운영자인데 없음) | 거부 | 0002 |
+| 7 | 대문자·`_`·`-`로 시작·3자 미만인 예약 주소명, 같은 이메일·주소명 두 번 | 거부 | 0002 |
+| 8 | 없는 계정을 가리키는 세션, 16진수가 아닌 `token_hash` | 거부 | 0002 |
+| 9 | `login_failures`: `failed_count = 6`, 5인데 잠금 시각 없음, 5 미만인데 잠금 시각 있음 | 거부 | 0002 |
+| 10 | 기존 테스트(자원·운영시간·예약·겹침 트리거) | 그대로 통과 | 0001 |
+| 11 | `owner_account_id`가 없는 자원, 소유자 없는 자원이 있을 때 0003 적용 | 거부, 절차 멈춤 | 0003 (5단계) |
+| 12 | 비회원 예약 INSERT (`customer_account_id = NULL`) | 성공 | 0004 (7단계) |
 
 ### 5.5 되돌리기
-- 이전 커밋으로 코드를 되돌리고 DB 파일을 지운 뒤 서버를 시작하면 옛 구조(테이블 셋)로 다시 만들어진다.
-- 새 구조에서 만든 계정·예약은 옮기지 않는다. 첫 버전은 배포 전이라 지켜야 할 운영 데이터가 없다. (F-04)
+- `uv run alembic downgrade -1`은 마지막 절차 하나를, `uv run alembic downgrade base`는 전부를 되돌린다.
+- 되돌리면 그 절차가 만든 테이블과 컬럼의 데이터는 사라진다. 배포 뒤에는 되돌리기 전에 DB 파일을 백업한다.
 
 ## 6. 비밀값 다루기
 
@@ -168,11 +173,9 @@ PRD Must의 R-018~R-023(계정·로그인)을 위해 저장 구조를 바꾸는 
 
 ## 7. DATA-MODEL 반영
 
-이 계획대로 구현하고 테스트가 통과하면 `DATA-MODEL.md`의 1절(테이블 목록), 2절(테이블), 5절(인덱스), 7절(짝 맞추기)의 "4단계에서 설계" 항목을 이 문서의 내용으로 바꾼다.
+절차 0001~0004의 구조를 `DATA-MODEL.md` 1·2·4·5·7절에 반영했다(2026-10-23). 지금 구조의 원본은 `DATA-MODEL.md`다.
 
 ## 8. 결정 필요
 
-- Q-26: 비회원 예약을 계정에 연결
-- Q-27: 정지된 운영자의 자원·예약 처리
 - 계정 삭제와 외래키의 삭제 동작 (PRD에 없음)
 - 예약 주소명 변경 (PRD에 없음)

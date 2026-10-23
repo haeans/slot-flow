@@ -27,7 +27,7 @@ def storage_error() -> ApiError:
     return ApiError(500, "STORAGE_ERROR", "저장소 오류로 요청을 처리하지 못했습니다.")
 
 
-def _body(error: ApiError) -> JSONResponse:
+def error_response(error: ApiError) -> JSONResponse:
     return JSONResponse(
         status_code=error.status,
         content={"error": {"code": error.code, "message": error.message}},
@@ -37,14 +37,14 @@ def _body(error: ApiError) -> JSONResponse:
 def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def handle_api_error(request: Request, exc: ApiError):
-        return _body(exc)
+        return error_response(exc)
 
     # FastAPI 기본 422도 같은 형식의 INVALID_INPUT(400)으로 바꾼다. (D-026)
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(request: Request, exc: RequestValidationError):
-        return _body(invalid_input())
+        return error_response(invalid_input())
 
     # 저장소 CHECK에 걸리는 등 판정이 빠진 경우는 STORAGE_ERROR(500)다. (D-036)
     @app.exception_handler(sqlite3.Error)
     async def handle_storage_error(request: Request, exc: sqlite3.Error):
-        return _body(storage_error())
+        return error_response(storage_error())

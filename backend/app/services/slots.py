@@ -3,7 +3,7 @@ import sqlite3
 from datetime import date, timedelta
 
 from app.errors import invalid_input, resource_not_found
-from app.services.resources import load_operating_hours, resource_exists
+from app.services.resources import bookable_resource, load_operating_hours
 from app.validation.resource_input import WEEKDAYS
 
 _DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -31,7 +31,7 @@ def to_datetime_text(day: date, minutes: int) -> str:
 
 def list_slots(conn: sqlite3.Connection, resource_id: int, day: date) -> dict:
     """그날 요일의 운영시간을 30분 칸으로 나눈다. (API-SPEC 4.2, D-020)"""
-    if not resource_exists(conn, resource_id):
+    if bookable_resource(conn, resource_id) is None:
         raise resource_not_found()
     hours = load_operating_hours(conn, resource_id)[WEEKDAYS[day.weekday()]]
     # 그날 시작하는 "예약됨" 예약. 시각은 고정 형식이라 문자열 비교가 곧 시간 비교다. (D-030)
