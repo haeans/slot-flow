@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import Admin from './pages/Admin.jsx'
 import Booking from './pages/Booking.jsx'
 import Login from './pages/Login.jsx'
 import Operator from './pages/Operator.jsx'
@@ -13,6 +14,7 @@ export default function App() {
       <Route path="/signup" element={<Signup />} />
       <Route path="/r/:slug" element={<Booking />} />
       <Route path="/operator" element={<Operator />} />
+      <Route path="/admin" element={<Admin />} />
     </Routes>
   )
 }

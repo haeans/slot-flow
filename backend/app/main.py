@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 
 from app import config
 from app.errors import error_response, install_error_handlers, invalid_input
-from app.routes import auth, reservations, resources
+from app.routes import admin, auth, reservations, resources
 from app.storage.db import init_db
 
 
@@ -21,6 +21,7 @@ install_error_handlers(app)
 app.include_router(resources.router)
 app.include_router(reservations.router)
 app.include_router(auth.router)
+app.include_router(admin.router)
 
 
 @app.middleware("http")

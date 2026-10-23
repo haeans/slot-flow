@@ -438,6 +438,13 @@
 - **적용 범위**: US-005 (SCREEN-SPEC 2절, 6절)
 - **유효 상태**: 유효
 
+## D-067 운영자 관리 요청은 /api/admin/operators 이고, 운영자는 예약 주소명으로 가리킨다
+- **결정**: `GET /api/admin/operators`, `POST /api/admin/operators/{예약 주소명}/approve`·`/suspend`를 둔다. 승인은 승인 대기에서만, 정지는 승인 대기·승인에서 할 수 있고, 정지된 운영자의 승인은 `409 INVALID_OPERATOR_STATE`로 거부한다. 이미 그 상태이면 같은 응답을 준다.
+- **검토한 대안**: 계정 내부 키(`accounts.id`)로 가리킨다.
+- **이유**: 사용자가 추천안을 골랐다(2026-10-22). 내부 키는 API에 내보내지 않는다(DATA-MIGRATION-PLAN 2.1). 정지된 운영자를 다시 승인하는 기능은 PRD에 없다.
+- **적용 범위**: US-020 (API-SPEC-CHANGE 2.5)
+- **유효 상태**: 유효
+
 ---
 
 ## 결정 필요 모아 보기

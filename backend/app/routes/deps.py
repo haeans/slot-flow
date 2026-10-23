@@ -29,3 +29,12 @@ def approved_operator(request: Request) -> sqlite3.Row:
     if account["operator_status"] == "suspended":
         raise ApiError(403, "OPERATOR_SUSPENDED", "정지된 운영자 계정입니다. 관리자에게 문의해 주세요.")
     return account
+
+
+def admin_account(request: Request) -> sqlite3.Row:
+    account = session_account(request)
+    if account is None:
+        raise sessions.unauthenticated()
+    if account["role"] != "admin":
+        raise ApiError(403, "FORBIDDEN", "이 기능을 쓸 권한이 없습니다.")
+    return account

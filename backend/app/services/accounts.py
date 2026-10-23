@@ -68,3 +68,32 @@ def set_password(conn: sqlite3.Connection, email: str, password_hash: str) -> bo
         conn.execute("DELETE FROM sessions WHERE account_id = ?", (row["id"],))
         conn.execute("DELETE FROM login_failures WHERE email = ?", (email,))
         return True
+
+
+def list_operators(conn: sqlite3.Connection) -> list[dict]:
+    rows = conn.execute(
+        "SELECT * FROM accounts WHERE role = 'operator' ORDER BY created_at, id"
+    ).fetchall()
+    return [account_object(row) for row in rows]
+
+
+# 상태를 바꿀 수 있는 이전 상태. 정지된 운영자를 다시 승인하는 기능은 PRD에 없다. (D-067)
+_ALLOWED_FROM = {"approved": ("pending", "approved"), "suspended": ("pending", "approved", "suspended")}
+
+
+def set_operator_status(conn: sqlite3.Connection, booking_slug: str, status: str) -> dict:
+    """운영자 승인·정지. 정지하면 그 운영자의 세션을 모두 지운다. (D-043, D-053, D-067)"""
+    with write_unit(conn):
+        row = conn.execute(
+            "SELECT * FROM accounts WHERE booking_slug = ? AND role = 'operator'", (booking_slug,)
+        ).fetchone()
+        if row is None:
+            raise ApiError(404, "OPERATOR_NOT_FOUND", "그 예약 주소명의 운영자가 없습니다.")
+        if row["operator_status"] not in _ALLOWED_FROM[status]:
+            raise ApiError(409, "INVALID_OPERATOR_STATE", "정지된 운영자는 다시 승인할 수 없습니다.")
+        conn.execute("UPDATE accounts SET operator_status = ? WHERE id = ?", (status, row["id"]))
+        if status == "suspended":
+            conn.execute("DELETE FROM sessions WHERE account_id = ?", (row["id"],))
+        return account_object(
+            conn.execute("SELECT * FROM accounts WHERE id = ?", (row["id"],)).fetchone()
+        )

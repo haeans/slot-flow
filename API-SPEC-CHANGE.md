@@ -33,6 +33,7 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 | 409 | `BOOKING_SLUG_TAKEN` | 이미 쓰는 예약 주소명 | D-060 |
 | 404 | `OPERATOR_NOT_FOUND` | 고객이 조회한 예약 주소명의 승인된 운영자가 없음 | D-059, 3절 |
 | 429 | `TOO_MANY_ATTEMPTS` | 같은 이메일로 5번 연속 로그인 실패, 10분 동안 잠김 | D-062 |
+| 409 | `INVALID_OPERATOR_STATE` | 정지된 운영자를 다시 승인하려 함 | D-067 |
 
 그 밖의 거부는 API-SPEC 1.6의 코드(`INVALID_INPUT`, `UNAUTHENTICATED`, `FORBIDDEN`, `OPERATOR_NOT_APPROVED`, `OPERATOR_SUSPENDED`)를 쓴다.
 
@@ -136,6 +137,16 @@ API-SPEC 2절과의 대응: 1 → #11·#12, 2 → #1, 3 → #2, 4는 새로 더�
 7. **거부 응답**: `401 UNAUTHENTICATED`(세션 없음·만료). 정지된 운영자는 정지할 때 세션이 지워지므로 이 응답을 받는다. (D-053)
 8. **실패 응답**: API-SPEC 1.6 공통 규칙
 - 화면 표시용이다. 실제 차단은 각 요청의 진입 단계가 한다. (D-005)
+
+### 2.5 운영자 관리 (관리자, API-SPEC 2절 #13·#14)
+| 요청 | 하는 일 | 성공 응답 | 거부 응답 |
+|---|---|---|---|
+| `GET /api/admin/operators` | 운영자와 상태를 가입 순으로 읽는다 | `200`, `{ "operators": [<계정 객체>, …] }` | `401 UNAUTHENTICATED`, `403 FORBIDDEN` |
+| `POST /api/admin/operators/{예약 주소명}/approve` | 승인 대기 → 승인 | `200`, `{ "operator": <계정 객체> }` | 위 + `404 OPERATOR_NOT_FOUND`, `409 INVALID_OPERATOR_STATE`(정지된 운영자) |
+| `POST /api/admin/operators/{예약 주소명}/suspend` | 승인 대기·승인 → 정지. 같은 쓰기 단위에서 그 운영자의 세션을 모두 지운다 (D-053) | 같음 | 위 + `404 OPERATOR_NOT_FOUND` |
+
+- 관리자 세션만 받는다. 운영자는 내부 키 대신 예약 주소명으로 가리킨다. (D-067)
+- 이미 그 상태이면 바꾸지 않고 같은 응답을 준다.
 
 ---
 
