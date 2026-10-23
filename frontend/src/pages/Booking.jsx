@@ -174,7 +174,7 @@ export default function Booking() {
                     </select>
                   </label>
                   <label>
-                    이름
+                    이름 (로그인한 회원은 비워 두면 계정 이름을 씁니다)
                     <input value={name} onChange={(e) => setName(e.target.value)} />
                   </label>
                   <button type="submit" disabled={submitting}>
@@ -206,6 +206,8 @@ function Result({ result }) {
           예약 코드 <strong className="code">{r.reservation_code}</strong>
         </p>
         <p>예약 코드는 내 예약을 조회하고 취소할 때 필요합니다. 꼭 적어 두세요.</p>
+        {/* 회원이 모르는 사이에 비회원 예약이 되지 않았는지 보여 준다. (D-051) */}
+        <p>{r.is_member ? '회원 예약으로 저장했습니다. 내 예약 목록에서도 볼 수 있습니다.' : '비회원 예약입니다.'}</p>
       </section>
     )
   }

@@ -16,7 +16,8 @@ class ReservationInput(BaseModel):
     resource_id: StrictInt
     start_at: StrictStr
     end_at: StrictStr
-    customer_name: StrictStr
+    # 회원은 생략할 수 있고, 생략하면 계정 이름을 저장한다. 비회원은 필수다. (D-068)
+    customer_name: StrictStr | None = None
 
 
 def now_seoul() -> datetime:

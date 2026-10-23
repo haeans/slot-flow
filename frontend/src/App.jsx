@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Admin from './pages/Admin.jsx'
 import Booking from './pages/Booking.jsx'
 import Login from './pages/Login.jsx'
+import MyReservations from './pages/MyReservations.jsx'
 import Operator from './pages/Operator.jsx'
 import Signup from './pages/Signup.jsx'
 
@@ -15,6 +16,7 @@ export default function App() {
       <Route path="/r/:slug" element={<Booking />} />
       <Route path="/operator" element={<Operator />} />
       <Route path="/admin" element={<Admin />} />
+      <Route path="/me" element={<MyReservations />} />
     </Routes>
   )
 }

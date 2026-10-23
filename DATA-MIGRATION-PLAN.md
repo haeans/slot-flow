@@ -88,7 +88,7 @@ PRD Must의 R-018~R-023(계정·로그인)을 위해 저장 구조를 바꾸는 
 - 회원 예약이면 그 회원의 계정이고, 비회원 예약이면 `NULL`이다.
 - 겹침 트리거(DATA-MODEL 3절)는 이 컬럼을 보지 않는다. 트리거는 바꾸지 않는다.
 - 인덱스 `reservations(customer_account_id)`: 회원의 내 예약 목록(API-SPEC 2절 #15)에 쓴다.
-- 비회원 예약을 나중에 계정에 연결할지: **[결정 필요 Q-26]**
+- 비회원 예약은 나중에 계정에 연결하지 않는다. (D-069)
 
 ## 4. 값의 저장 형식
 
@@ -121,8 +121,8 @@ DB 구조는 alembic 절차로만 만들고 바꾼다. (D-064)
 |---|---|---|---|---|
 | `0001` initial schema | — | M1의 구조: `resources`, `operating_hours`, `reservations`, 인덱스, 겹침 트리거 | `CREATE` SQL (이전 `db.py`의 `SCHEMA` 그대로) | 적용 |
 | `0002` add accounts sessions login_failures | 1 저장 구조 | `accounts`, `sessions`, `login_failures`, 관리자 1명 인덱스, `sessions(account_id)` 인덱스 (2절) | `CREATE` SQL. 기존 테이블은 바꾸지 않음 | 적용 |
-| `0003` add resources owner | 5 역할·소유 검사 | `resources.owner_account_id` 필수 컬럼, `resources(owner_account_id)` 인덱스 (3.1) | 기본값 없는 `NOT NULL` 외래키는 `ALTER`로 더할 수 없어, 새 테이블을 만들어 행을 옮기고 바꿔 끼운다. `STRICT`, 외래키, 트리거를 다시 만든다 | 그 단계에서 작성 |
-| `0004` add reservations customer account | 7 회원 예약 | `reservations.customer_account_id` (NULL 허용), 인덱스 (3.2) | `ALTER TABLE ADD COLUMN` | 그 단계에서 작성 |
+| `0003` add resources owner | 5 역할·소유 검사 | `resources.owner_account_id` 필수 컬럼, `resources(owner_account_id)` 인덱스 (3.1) | 기본값 없는 `NOT NULL` 외래키는 `ALTER`로 더할 수 없어, 새 테이블을 만들어 행을 옮기고 바꿔 끼운다. `STRICT`, 외래키, 트리거를 다시 만든다 | 작성 (실제 DB에는 아직 적용 안 함) |
+| `0004` add reservations customer account | 7 회원 예약 | `reservations.customer_account_id` (NULL 허용), 인덱스 (3.2) | `ALTER TABLE ADD COLUMN` | 작성 (실제 DB에는 아직 적용 안 함) |
 
 - 소유자 컬럼(0003)과 회원 컬럼(0004)을 그 기능의 단계에서 더하므로, 1~4단계 동안 기존 자원 등록과 예약이 그대로 동작한다.
 - **0003의 기존 자원**: 소유자를 정할 수 없는 자원이 있으면 절차가 멈추고 "소유 운영자가 없는 자원이 있습니다"를 출력한다. 절차는 데이터를 지우지 않는다. 개발용 자원이면 직접 정리하고 다시 적용한다. (D-064)
@@ -173,10 +173,9 @@ DB 구조는 alembic 절차로만 만들고 바꾼다. (D-064)
 
 ## 7. DATA-MODEL 반영
 
-이 계획대로 구현하고 테스트가 통과하면 `DATA-MODEL.md`의 1절(테이블 목록), 2절(테이블), 5절(인덱스), 7절(짝 맞추기)의 "4단계에서 설계" 항목을 이 문서의 내용으로 바꾼다.
+절차 0001~0004의 구조를 `DATA-MODEL.md` 1·2·4·5·7절에 반영했다(2026-10-23). 지금 구조의 원본은 `DATA-MODEL.md`다.
 
 ## 8. 결정 필요
 
-- Q-26: 비회원 예약을 계정에 연결
 - 계정 삭제와 외래키의 삭제 동작 (PRD에 없음)
 - 예약 주소명 변경 (PRD에 없음)
